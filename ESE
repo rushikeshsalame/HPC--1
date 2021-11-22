@@ -1,0 +1,178 @@
+Q1.Implementation fibonacci series using openmp
+#include<stdio.h>
+#include<omp.h>
+ 
+int fib(int n)
+{
+if(n<2) return n;
+else return fib(n-1)+fib(n-2);
+}
+ 
+int main()
+{
+int fibnumber[100],i,j,n;
+printf("Please Enter the series limit\n");
+scanf("%d",&n);
+#pragma omp parallel num_threads(2)
+{
+#pragma omp critical
+if(omp_get_thread_num()==0)
+{
+printf("There are %d threads\n", omp_get_num_threads());
+printf("Thread %d generating numbers..\n", omp_get_thread_num());
+for(i=0;i<n;i++)
+fibnumber[i]=fib(i);
+}
+else
+{
+printf("Thread %d Printing numbers..\n", omp_get_thread_num());
+for(j=0;j<n;j++)
+printf("%d\t", fibnumber[j]);
+}
+ 
+}
+ return 0;
+}
+
+
+
+
+Q2. Implement MPI program to send double from one process to other 
+#include "mpi.h"
+#include <iostream>
+#include "string.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+
+double f(double a)
+{
+    return(2.0 / sqrt(1 - a * a));
+}
+
+int main(int argc, char* argv[])
+{
+    int N;		// Number of intervals
+    double w, x;		// width and x point
+    int    i, myid;
+    double mypi, others_pi;
+
+
+    MPI_Init(&argc, &argv);                      // Initialize
+
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);  // Get # processors
+    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+    N = atoi(argv[1]);
+    w = 1.0 / (double)N;
+
+    mypi = 0.0;
+
+    /* ---------------------------------------------------------
+       Every MPI process computes a partial sum for the integral
+   --------------------------------------------------------- */
+    for (i = myid; i < N; i = i + num_procs)
+    {
+        x = w * (i + 0.5);
+        mypi = mypi + w * f(x);
+    }
+
+
+    /* -----------------------------
+       Now put the sum together...
+   ----------------------------- */
+    if (myid == 0)
+    {  /* ----------------------------------------------------
+          Proc 0 collects and others send data to proc 0
+          ---------------------------------------------------- */
+        for (i = 1; i < num_procs; i++)
+        {
+
+            MPI_Recv(&others_pi, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, NULL);
+
+            mypi += others_pi;
+        }
+
+        cout << "Pi = " << mypi << endl << endl;   // Output...
+    }
+    else
+    {  /* ---------------------------------------------
+          The other processors send their partial sum
+      to processor 0
+      --------------------------------------------- */
+        MPI_Send(&mypi, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+}
+
+
+Q3. Implement matrix multiplication using CUDA
+
+%%cu
+#include<stdio.h>
+#include<cuda.h>
+#define row1 2 /* Number of rows of first matrix */
+#define col1 3 /* Number of columns of first matrix */
+#define row2 3 /* Number of rows of second matrix */
+#define col2 2 /* Number of columns of second matrix */
+
+__global__ void matproductsharedmemory(int *l,int *m, int *n)
+{
+    int x=blockIdx.x;
+    int y=blockIdx.y;
+    __shared__ int p[col1];
+
+    int i;
+    int k=threadIdx.x;
+
+    n[col2*y+x]=0;
+
+   p[k]=l[col1*y+k]*m[col2*k+x];
+
+  __syncthreads();
+
+  for(i=0;i<col1;i++)
+  n[col2*y+x]=n[col2*y+x]+p[i];
+}
+
+int main()
+{
+    int a[row1][col1]={1, 3, 2, 5, 6, 4};
+    int b[row2][col2]={1, 2, 3, 4, 5, 6};
+    int c[row1][col2];
+    int *d,*e,*f;
+    int i,j;
+
+
+   cudaMalloc((void **)&d,row1*col1*sizeof(int));
+    cudaMalloc((void **)&e,row2*col2*sizeof(int));
+    cudaMalloc((void **)&f,row1*col2*sizeof(int));
+
+ cudaMemcpy(d,a,row1*col1*sizeof(int),cudaMemcpyHostToDevice);
+ cudaMemcpy(e,b,row2*col2*sizeof(int),cudaMemcpyHostToDevice);
+
+dim3 grid(col2,row1);
+/* Here we are defining two dimensional Grid(collection of blocks) structure. Syntax is dim3 grid(no. of columns,no. of rows) */
+
+matproductsharedmemory<<<grid,col1>>>(d,e,f);
+
+ cudaMemcpy(c,f,row1*col2*sizeof(int),cudaMemcpyDeviceToHost);
+
+ printf("\n Matrix multiplication is: \n ");
+    for(i=0;i<row1;i++)
+    {
+        for(j=0;j<col2;j++)
+        {
+              printf("%d\t",c[i][j]);
+        }
+        printf(" \n");
+    }
+
+    cudaFree(d);
+    cudaFree(e);
+    cudaFree(f);
+
+    return 0;
+}
